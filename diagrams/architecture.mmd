@@ -1,0 +1,48 @@
+flowchart LR
+    %% PawPal+ with the PawPal Assistant: input -> process -> output,
+    %% with the human approval step and the testing that checks the AI.
+
+    User([Pet owner])
+
+    subgraph UI["Streamlit app (app.py)"]
+        Tabs["Tabs: Schedule · New pet setup<br/>Care check · Ask PawPal"]
+    end
+
+    subgraph AI["PawPal Assistant (pawpal_ai/)"]
+        Guard{"Input guardrails<br/>empty · off-topic ·<br/>harm · emergency"}
+        subgraph Retriever["Retriever"]
+            Household[("Household<br/>pets, tasks, today's plan")]
+            Notes[("Care notes<br/>knowledge/*.md")]
+            Web[("Wikipedia API<br/>cached, rate-limited")]
+        end
+        Agent["Setup agent<br/>draft → schedule → check →<br/>AI revise ≤2 → rule safety net"]
+        LLM["Gemini (free tier)<br/>or offline mode"]
+        Check{"Output checks<br/>citations · task validation<br/>confidence score"}
+    end
+
+    Scheduler["Scheduler<br/>pawpal_system.py"]
+    Out["Answer with sources ·<br/>gaps / routine to review"]
+    Logs[("logs/<br/>pawpal_ai.log · agent_traces.jsonl")]
+
+    subgraph QA["Testing"]
+        Tests["pytest: 130 tests<br/>fake model + fake web"]
+        Eval["evaluate_ai.py<br/>10 cases + consistency"]
+    end
+
+    User -->|question / pet description| Tabs
+    Tabs --> Guard
+    Guard -->|emergency: see a vet| Out
+    Guard -->|ok| Retriever
+    Retriever -->|numbered sources S1..Sn| LLM
+    LLM --> Check
+    Agent -->|trial schedule| Scheduler
+    Scheduler -->|problems found| Agent
+    Check --> Agent
+    Agent --> Out
+    Check --> Out
+    Out --> Tabs
+    Tabs -->|human clicks Accept| Scheduler
+    Scheduler -->|timetable| Tabs
+    AI -.->|every step| Logs
+    Tests -.->|verify| AI
+    Eval -.->|measure| AI
